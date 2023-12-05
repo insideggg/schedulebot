@@ -1,4 +1,5 @@
 import telebot
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 from firebase_admin import credentials, firestore, initialize_app
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -34,18 +35,38 @@ def schedule_handle(message):
         date_str = parts[-2]
         time_str = parts[-1]
 
+        #Create menu
+        markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        markup.add(KeyboardButton('10 min'))
+        markup.add(KeyboardButton('15 min'))
+        markup.add(KeyboardButton('30 min'))
+        markup.add(KeyboardButton('40 min'))
+
+        bot.send_message(user_id, "Choose notification time:", reply_markup=markup)
+        bot.register_next_step_handler(message, paste_to_db, action_name, date_str, time_str)
+    except ValueError:
+        bot.send_message(user_id, "Something went wrong! Try again.")
+
+def paste_to_db(message, action_name, date_str, time_str):
+    user_id = message.chat.id
+
+    try:
+        # Parse notification time
+        notification_minutes_before = int(message.text.split()[0])
+
         schedule_datetime = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
 
         # Save to Firestore
         doc_ref = db.collection('users').document(str(user_id)).collection('schedules').add({
             'action_name': action_name,
             'schedule_datetime': schedule_datetime,
-            'notify_minutes_before': 0
+            'notify_minutes_before': notification_minutes_before
         })
 
         bot.send_message(user_id, "Your schedule has been saved!")
     except ValueError:
         bot.send_message(user_id, "Something went wrong! Try again.")
+
 
 @bot.message_handler(commands=['getschedule'])
 def getschedule(message):
