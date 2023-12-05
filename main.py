@@ -1,5 +1,8 @@
+# handle_year, handle_month, handle_day, save_date
+# functions for constructing date based on user button interaction
+
 import telebot
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from firebase_admin import credentials, firestore, initialize_app
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -16,24 +19,72 @@ bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.send_message(message.chat.id, "Welcome to ScheduleBot! Use /schedule to create your event")
+    bot.send_message(message.chat.id, "Welcome to ScheduleBot!\n"
+                                      "Use /schedule to create your event")
 
 @bot.message_handler(commands=['schedule'])
 def schedule(message):
     user_id = message.chat.id
-    bot.send_message(user_id, "Write information about your event in format: ActionName date(YYYY-MM-DD) time(HH:mm)")
+    bot.send_message(user_id, "Write name of your event.")
+
+    bot.register_next_step_handler(message, handle_year)
 
     # Set the state to 'schedule_handle'
-    bot.register_next_step_handler(message, schedule_handle)
+    # bot.register_next_step_handler(message, schedule_handle)
 
-def schedule_handle(message):
+
+def handle_year(message):
+    user_id = message.chat.id
+    action_name = message.text
+
+    yearMarkup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    yearMarkup.add(KeyboardButton('2023'))
+    yearMarkup.add(KeyboardButton('2024'))
+    bot.send_message(user_id, "Choose year of event!", reply_markup=yearMarkup)
+
+    bot.register_next_step_handler(message, handle_month, action_name)
+
+def handle_month(message, action_name):
+    user_id = message.chat.id
+    year = message.text
+
+    monthMarkup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    for month in range(1, 13):
+        monthMarkup.add(KeyboardButton(f"{month}"))
+
+    bot.send_message(user_id, "Choose month of event!", reply_markup=monthMarkup)
+
+    bot.register_next_step_handler(message, handle_day, action_name, year)
+
+def handle_day(message, action_name, year):
+    user_id = message.chat.id
+    month = message.text
+
+    dayMarkup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    for day in range(1, 32):
+        dayMarkup.add(KeyboardButton(f"{day}"))
+
+    bot.send_message(user_id, "Choose day of the event!", reply_markup=dayMarkup)
+
+    bot.register_next_step_handler(message, save_date,action_name, year, month)
+
+def save_date(message, action_name, year, month):
+    user_id = message.chat.id
+    day = message.text
+
+    full_date = year + '-' + month + '-' + day
+    bot.send_message(user_id, "Write time of your event, for example: 17:56")
+
+    bot.register_next_step_handler(message, schedule_handle, full_date, action_name)
+
+
+def schedule_handle(message, full_date, action_name):
     user_id = message.chat.id
 
     try:
-        parts = message.text.split()
-        action_name = " ".join(parts[:-2])
-        date_str = parts[-2]
-        time_str = parts[-1]
+        action_name = action_name
+        date_str = full_date
+        time_str = message.text
 
         #Create menu
         markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
@@ -44,8 +95,10 @@ def schedule_handle(message):
 
         bot.send_message(user_id, "Choose notification time:", reply_markup=markup)
         bot.register_next_step_handler(message, paste_to_db, action_name, date_str, time_str)
-    except ValueError:
+    except Exception as e:
+        print(e)
         bot.send_message(user_id, "Something went wrong! Try again.")
+
 
 def paste_to_db(message, action_name, date_str, time_str):
     user_id = message.chat.id
@@ -64,7 +117,8 @@ def paste_to_db(message, action_name, date_str, time_str):
         })
 
         bot.send_message(user_id, "Your schedule has been saved!")
-    except ValueError:
+    except Exception as e:
+        print(e)
         bot.send_message(user_id, "Something went wrong! Try again.")
 
 
@@ -124,6 +178,43 @@ def check_notifications(message):
         # Check if it's time to send a notification
         if schedule_datetime - timedelta(minutes=notify_minutes_before) <= now < schedule_datetime:
             bot.send_message(user_id, f"Reminder: {schedule.get('action_name')} is happening in {notify_minutes_before} minutes!")
+
+
+# Callback inline handle
+# @bot.callback_query_handler(func=lambda call: True)
+# def handle_callback_query(call: CallbackQuery):
+#     user_id = call.from_user.id
+#     data = call.data
+#
+#     bot.answer_callback_query(call.id, text=f"Selected: {data}")
+#
+#     # Check if the selected data corresponds to a month
+#     if data.isdigit() and 1 <= int(data) <= 12:
+#         handle_month_callback(call.message, user_id, int(data))
+#     # Check if the selected data corresponds to a day
+#     elif '1' <= data <= '31':
+#         handle_day_callback(call.message, user_id, int(data))
+#     elif data.isdigit() and 2023 <= int(data) <= 2024:
+#         handle_year_callback(call.message, user_id, int(data))
+#     else:
+#         bot.send_message(user_id, "Invalid selection. Please try again.")
+#
+#
+# def handle_month_callback(message, user_id, selected_month):
+#     # Handle the selected month here
+#     bot.send_message(user_id, f"Selected month: {selected_month}")
+#
+#     bot.register_next_step_handler(message, handle_day)
+#
+#
+# def handle_day_callback(message, user_id, selected_day):
+#     # Handle the selected day here
+#     bot.send_message(user_id, f"Selected day: {selected_day}")
+#
+#
+# def handle_year_callback(message, user_id, selected_year):
+#     bot.send_message((user_id, f"Selected year: {selected_year}"))
+
 
 # Polling loop
 bot.polling(none_stop=True)
