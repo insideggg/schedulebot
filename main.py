@@ -7,8 +7,8 @@ from firebase_admin import credentials, firestore, initialize_app
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
-TOKEN = '6756452663:AAGvRBAbBxFii6e7kgV60FceqSrc0O7SJ-4'
-FIREBASE_CREDS_PATH = 'schedulebot-994b3-firebase-adminsdk-kokuq-4c355dd7c3.json'
+TOKEN = 'BOT_TOKEN'
+FIREBASE_CREDS_PATH = 'json_file_here'
 
 # Initialize Firebase
 cred = credentials.Certificate(FIREBASE_CREDS_PATH)
