@@ -6,7 +6,7 @@ import telebot
 user_schedules = {}
 user_notifications = {}
 
-TOKEN = '6756452663:AAGvRBAbBxFii6e7kgV60FceqSrc0O7SJ-4'
+TOKEN = 'BOT_TOKEN'
 
 bot = telebot.TeleBot(TOKEN)
 
