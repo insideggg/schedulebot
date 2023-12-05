@@ -2,9 +2,9 @@
 # functions for constructing date based on user button interaction
 
 import telebot
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 from firebase_admin import credentials, firestore, initialize_app
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
 TOKEN = '6756452663:AAGvRBAbBxFii6e7kgV60FceqSrc0O7SJ-4'
@@ -166,7 +166,7 @@ def getschedule(message):
 
 @bot.message_handler(func=lambda message: True)
 def check_notifications(message):
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     user_id = message.chat.id
 
     schedules = db.collection('users').document(str(user_id)).collection('schedules').stream()
@@ -178,6 +178,62 @@ def check_notifications(message):
         # Check if it's time to send a notification
         if schedule_datetime - timedelta(minutes=notify_minutes_before) <= now < schedule_datetime:
             bot.send_message(user_id, f"Reminder: {schedule.get('action_name')} is happening in {notify_minutes_before} minutes!")
+
+
+@bot.message_handler(commands=['makevoicenotice'])
+def makevoicenotice(message):
+    user_id = message.chat.id
+    bot.send_message(user_id, "You can start to record your voice right now!")
+
+    bot.register_next_step_handler(message, voice_handler)
+
+def voice_handler(message):
+    user_id = message.chat.id
+
+    try:
+        voice = message.voice
+        if voice:
+            voice_file_id = voice.file_id
+            voice_duration = voice.duration
+
+            doc_ref = db.collection('users').document(str(user_id)).collection('voices').add({
+                'file_id': voice_file_id,
+                'duration': voice_duration,
+                'timestamp': datetime.now()
+            })
+
+            bot.send_message(user_id, "Your voice notice has been saved!")
+        else:
+            bot.send_message(user_id, "Probably you dont record your voice. Try again!")
+    except Exception as e:
+        print(f"Caught: {e}")
+        bot.send_message(user_id, "Something went wrong!")
+
+
+@bot.message_handler(commands=['getvoice'])
+def getvoice(message):
+    user_id = message.chat.id
+
+    try:
+        voices = db.collection('users').document(str(user_id)).collection('voices').stream()
+
+        if voices:
+            for voice in voices:
+                voice_file_id = voice.get('file_id')
+                voice_duration = voice.get('duration')
+                timestamp = voice.get('timestamp')
+
+                voice_file_info = bot.get_file(voice_file_id)
+
+                bot.send_voice(user_id, voice_file_info.file_id, caption=f"Duration: {voice_duration}\n"
+                                                                         f"Recordered: {timestamp}")
+        else:
+            bot.send_message(user_id, "There ain't any voice records in you folder!\n"
+                                      "Use /makevoicenotice to create one")
+    except Exception as e:
+        print(f"Caught: {e}")
+        bot.send_message(user_id, "Something went wrong")
+
 
 
 # Callback inline handle
